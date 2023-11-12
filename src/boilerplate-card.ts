@@ -11,10 +11,12 @@ import {
   getLovelace,
 } from 'custom-card-helpers'; // This is a community maintained npm module with common helper functions/types. https://github.com/custom-cards/custom-card-helpers
 
-import type { BoilerplateCardConfig } from './types';
+import type { ACInfinityControllerDevice, BoilerplateCardConfig, EntitiesCardConfig, LovelaceRowConfig } from './types';
 import { actionHandler } from './action-handler-directive';
-import { CARD_VERSION } from './const';
+import { ATTR_KEY_CONTROLLER_NAME, ATTR_KEY_DATA_KEY, ATTR_KEY_PORT_NAME, CARD_VERSION, SENSOR_PORT_KEY_ONLINE, SENSOR_PORT_KEY_SPEAK, SENSOR_SETTING_KEY_SURPLUS, SETTING_KEY_AT_TYPE, SETTING_KEY_AUTO_HUMIDITY_HIGH_ENABLED, SETTING_KEY_AUTO_HUMIDITY_HIGH_TRIGGER, SETTING_KEY_AUTO_HUMIDITY_LOW_ENABLED, SETTING_KEY_AUTO_HUMIDITY_LOW_TRIGGER, SETTING_KEY_AUTO_TEMP_HIGH_ENABLED, SETTING_KEY_AUTO_TEMP_HIGH_TRIGGER, SETTING_KEY_AUTO_TEMP_LOW_ENABLED, SETTING_KEY_AUTO_TEMP_LOW_TRIGGER, SETTING_KEY_CYCLE_DURATION_OFF, SETTING_KEY_CYCLE_DURATION_ON, SETTING_KEY_OFF_SPEED, SETTING_KEY_ON_SPEED, SETTING_KEY_SCHEDULED_END_TIME, SETTING_KEY_SCHEDULED_START_TIME, SETTING_KEY_TIMER_DURATION_TO_OFF, SETTING_KEY_TIMER_DURATION_TO_ON, SETTING_KEY_VPD_HIGH_ENABLED, SETTING_KEY_VPD_HIGH_TRIGGER, SETTING_KEY_VPD_LOW_ENABLED, SETTING_KEY_VPD_LOW_TRIGGER } from './const';
 import { localize } from './localize/localize';
+import { Helpers } from './helpers';
+import { HassEntity } from 'home-assistant-js-websocket';
 
 /* eslint no-console: 0 */
 console.info(
@@ -85,19 +87,117 @@ export class BoilerplateCard extends LitElement {
     if (this.config.show_error) {
       return this._showError(localize('common.show_error'));
     }
+    
+    if(this.config.controller_id && this.config.port_id) {
+      const entities = Helpers.getACInfinityPortDevices(this.hass, this.config.controller_id, this.config.port_id);
+      if(entities.length <= 0) {
+        return this._showWarning("Configured device has no entities")
+      }
 
-    return html`
-      <ha-card
-        .header=${this.config.name}
-        @action=${this._handleAction}
-        .actionHandler=${actionHandler({
-          hasHold: hasAction(this.config.hold_action),
-          hasDoubleClick: hasAction(this.config.double_tap_action),
-        })}
-        tabindex="0"
-        .label=${`Boilerplate: ${this.config.entity || 'No Entity Defined'}`}
-      ></ha-card>
-    `;
+      const controllerName = entities[0].attributes[ATTR_KEY_CONTROLLER_NAME];
+      const portName = entities[0].attributes[ATTR_KEY_PORT_NAME];
+      
+      const baseEntities:HassEntity[] = this._getEntitiesIfExists(entities, [
+        SENSOR_PORT_KEY_ONLINE,
+        SENSOR_PORT_KEY_SPEAK,
+        SETTING_KEY_AT_TYPE,
+        SETTING_KEY_ON_SPEED,
+        SETTING_KEY_OFF_SPEED,
+      ])
+
+      const mode = entities.find(x => x.attributes[ATTR_KEY_DATA_KEY] == SETTING_KEY_AT_TYPE)
+      let modeEntities:HassEntity[] = []
+      if(mode) {
+        switch(mode?.state) {
+          case "Off": { 
+            // no additional fields
+            break;
+          }
+          case "On": { 
+            // no additional fields
+            break;
+          }
+          case "Auto": { 
+            modeEntities = this._getEntitiesIfExists(entities, [
+              SETTING_KEY_AUTO_TEMP_HIGH_ENABLED,
+              SETTING_KEY_AUTO_TEMP_HIGH_TRIGGER,
+              SETTING_KEY_AUTO_TEMP_LOW_ENABLED,
+              SETTING_KEY_AUTO_TEMP_LOW_TRIGGER,
+              SETTING_KEY_AUTO_HUMIDITY_HIGH_ENABLED,
+              SETTING_KEY_AUTO_HUMIDITY_HIGH_TRIGGER,
+              SETTING_KEY_AUTO_HUMIDITY_LOW_ENABLED,
+              SETTING_KEY_AUTO_HUMIDITY_LOW_TRIGGER
+            ])
+            break;
+          }
+          case "Timer to On": { 
+            modeEntities.concat(this._getEntitiesIfExists(entities,[
+              SENSOR_SETTING_KEY_SURPLUS,
+              SETTING_KEY_TIMER_DURATION_TO_ON
+            ]))
+            break;
+          }
+          case "Timer to Off": { 
+            modeEntities.concat(this._getEntitiesIfExists(entities,[
+              SENSOR_SETTING_KEY_SURPLUS,
+              SETTING_KEY_TIMER_DURATION_TO_OFF
+            ]))
+            break;
+          }
+          case "Cycle": { 
+            modeEntities.concat(this._getEntitiesIfExists(entities,[
+              SENSOR_SETTING_KEY_SURPLUS,
+              SETTING_KEY_CYCLE_DURATION_ON,
+              SETTING_KEY_CYCLE_DURATION_OFF
+            ]))
+            break;
+          }
+          case "Schedule": { 
+            modeEntities.concat(this._getEntitiesIfExists(entities,[
+              SENSOR_SETTING_KEY_SURPLUS,
+              SETTING_KEY_SCHEDULED_START_TIME,
+              SETTING_KEY_SCHEDULED_END_TIME
+            ]))
+            break;
+          }
+          case "VPD": { 
+            modeEntities.concat(this._getEntitiesIfExists(entities,[
+              SETTING_KEY_VPD_HIGH_ENABLED,
+              SETTING_KEY_VPD_HIGH_TRIGGER,
+              SETTING_KEY_VPD_LOW_ENABLED,
+              SETTING_KEY_VPD_LOW_TRIGGER
+            ]))  
+            break;
+          }
+        }
+      }
+
+      const allEntities:HassEntity[] = baseEntities.concat(modeEntities);
+
+      const entitiesCard:any = document.createElement('hui-entities-card');
+      entitiesCard.hass = this.hass
+      entitiesCard.setConfig({
+        title: `${controllerName} ${portName}`,
+        entities: allEntities.map(x => x.entity_id),
+        show_header_toggle: false,
+      })
+
+      return html`${entitiesCard}`
+    }
+
+    return this._showWarning("No device Configured")
+  }
+
+  private _getEntitiesIfExists(entities:HassEntity[], data_keys:string[]): HassEntity[] {
+    const foundEntities:HassEntity[] = []
+    data_keys.forEach((data_key) => {
+      const current =  entities.find(x => x.attributes[ATTR_KEY_DATA_KEY] == data_key)
+      if(current) {
+        foundEntities.push(current)
+      }
+    })
+
+    return foundEntities
   }
 
   private _handleAction(ev: ActionHandlerEvent): void {

@@ -1,14 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { LitElement, html, TemplateResult, css, CSSResultGroup } from 'lit';
+import { LitElement, html, TemplateResult, css, CSSResultGroup, nothing } from 'lit';
 import { HomeAssistant, fireEvent, LovelaceCardEditor } from 'custom-card-helpers';
 
 import { ScopedRegistryHost } from '@lit-labs/scoped-registry-mixin';
-import { BoilerplateCardConfig } from './types';
+import { ACInfinityPortDevice, ACInfinityControllerDevice, BoilerplateCardConfig } from './types';
 import { customElement, property, state } from 'lit/decorators';
 import { formfieldDefinition } from '../elements/formfield';
 import { selectDefinition } from '../elements/select';
 import { switchDefinition } from '../elements/switch';
 import { textfieldDefinition } from '../elements/textfield';
+import { Helpers } from "./helpers"
 
 @customElement('boilerplate-card-editor')
 export class BoilerplateCardEditor extends ScopedRegistryHost(LitElement) implements LovelaceCardEditor {
@@ -41,12 +42,12 @@ export class BoilerplateCardEditor extends ScopedRegistryHost(LitElement) implem
     return true;
   }
 
-  get _name(): string {
-    return this._config?.name || '';
+  get _controller_id(): string {
+    return this._config?.controller_id || "";
   }
 
-  get _entity(): string {
-    return this._config?.entity || '';
+  get _port_id(): string {
+    return this._config?.port_id || "";
   }
 
   get _show_warning(): boolean {
@@ -62,43 +63,42 @@ export class BoilerplateCardEditor extends ScopedRegistryHost(LitElement) implem
       return html``;
     }
 
-    // You can restrict on domain type
-    const entities = Object.keys(this.hass.states);
+    const controller_devices: Array<ACInfinityControllerDevice> = Helpers.getControllersFromEntities(this.hass);
+    
+    let port_devices: Array<ACInfinityPortDevice> = []
+    if(this._controller_id) {
+      port_devices = Helpers.getPortsFromEntities(this.hass, this._controller_id);
+    }
 
     return html`
       <mwc-select
         naturalMenuWidth
         fixedMenuPosition
-        label="Entity (Required)"
-        .configValue=${'entity'}
-        .value=${this._entity}
+        label="UIS Controller (Required)"
+        .configValue=${'controller_id'}
+        .value=${this._controller_id}
         @selected=${this._valueChanged}
         @closed=${(ev) => ev.stopPropagation()}
       >
-        ${entities.map((entity) => {
-          return html`<mwc-list-item .value=${entity}>${entity}</mwc-list-item>`;
+        ${controller_devices.map((controller) => {
+          return html`<mwc-list-item .value=${controller.controller_id}>${controller.controller_name}</mwc-list-item>`;
         })}
       </mwc-select>
-      <mwc-textfield
-        label="Name (Optional)"
-        .value=${this._name}
-        .configValue=${'name'}
-        @input=${this._valueChanged}
-      ></mwc-textfield>
-      <mwc-formfield .label=${`Toggle warning ${this._show_warning ? 'off' : 'on'}`}>
-        <mwc-switch
-          .checked=${this._show_warning !== false}
-          .configValue=${'show_warning'}
-          @change=${this._valueChanged}
-        ></mwc-switch>
-      </mwc-formfield>
-      <mwc-formfield .label=${`Toggle error ${this._show_error ? 'off' : 'on'}`}>
-        <mwc-switch
-          .checked=${this._show_error !== false}
-          .configValue=${'show_error'}
-          @change=${this._valueChanged}
-        ></mwc-switch>
-      </mwc-formfield>
+      ${port_devices.length > 0 ?
+          html`<mwc-select
+          naturalMenuWidth
+          fixedMenuPosition
+          label="UIS Device (Required)"
+          .configValue=${'port_id'}
+          .value=${this._port_id}
+          @selected=${this._valueChanged}
+          @closed=${(ev) => ev.stopPropagation()}
+        >
+          ${port_devices.map((port) => {
+            return html`<mwc-list-item .value=${""+port.port_id}>${port.port_name}</mwc-list-item>`;
+          })}
+        </mwc-select>`
+      : nothing}
     `;
   }
 
