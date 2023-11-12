@@ -1,0 +1,45 @@
+{
+  "name": "lovelace-acinfinity-device-card",
+  "version": "1.0.0",
+  "keywords": [
+    "home-assistant",
+    "homeassistant",
+    "hass",
+    "automation",
+    "lovelace",
+    "custom-cards"
+  ],
+  "description": "Home Assistant Lovelace Card to be used in conjunction with https://github.com/dalinicus/homeassistant-acinfinity",
+  "dependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.1",
+    "custom-card-helpers": "^1.9.0",
+    "home-assistant-js-websocket": "^8.2.0",
+    "lit": "^2.8.0",
+    "rollup-plugin-babel": "^4.4.0"
+  },
+  "module": "dist/card.js",
+  "type": "module",
+  "devDependencies": {
+    "rollup": "^3.29.3",
+    "typescript": "^5.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dalinicus/lovelace-acinfinity-device-card.git"
+  },
+  "author": "Ryan Mattson <dalinicus@pm.me>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dalinicus/lovelace-acinfinity-device-card/issues"
+  },
+  "homepage": "https://github.com/dalinicus/lovelace-acinfinity-device-card#readme",
+  "targets": {
+    "module": {
+      "includeNodeModules": true
+    }
+  },
+  "scripts": {
+    "watch": "parcel watch",
+    "build": "rm -rf dist && rollup -c"
+  }
+}
